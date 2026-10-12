@@ -13,7 +13,7 @@ BUNDLE_NAME = BunnyResources
 
 KettuTweak_FILES = $(wildcard Sources/*.x Sources/*.m Sources/**/*.x Sources/**/*.m)
 KettuTweak_CFLAGS = -fobjc-arc -DPACKAGE_VERSION='@"$(THEOS_PACKAGE_BASE_VERSION)"' -I$(THEOS_PROJECT_DIR)/Headers
-KettuTweak_FRAMEWORKS = Foundation UIKit CoreGraphics CoreText CoreFoundation UniformTypeIdentifiers
+KettuTweak_FRAMEWORKS = Foundation UIKit CoreGraphics CoreText CoreFoundation UniformTypeIdentifiers UserNotifications
 
 BunnyResources_INSTALL_PATH = "/Library/Application\ Support/"
 BunnyResources_RESOURCE_DIRS = Resources
