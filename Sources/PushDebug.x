@@ -144,6 +144,70 @@ static void showPushSummary(void)
         }];
 }
 
+static void hookNotificationDelegateClass(Class cls)
+{
+    static NSMutableSet *done;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        done = [NSMutableSet new];
+    });
+
+    NSString *name = NSStringFromClass(cls);
+    if ([done containsObject:name])
+        return;
+
+    SEL sel = @selector(userNotificationCenter:
+                        willPresentNotification:
+                        withCompletionHandler:);
+
+    Method method = class_getInstanceMethod(cls, sel);
+    if (!method)
+    {
+        BunnyLog(@"[PushDebug] %@ does not implement willPresentNotification",
+                 name);
+        return;
+    }
+
+    done = done ?: [NSMutableSet new];
+    [done addObject:name];
+
+    IMP original = method_getImplementation(method);
+    const char *types = method_getTypeEncoding(method);
+
+    IMP replacement = imp_implementationWithBlock(
+        ^(id selfObj,
+          UNUserNotificationCenter *center,
+          UNNotification *notification,
+          void (^completion)(UNNotificationPresentationOptions options))
+        {
+            BunnyLog(@"[PushDebug] willPresentNotification CALLED");
+
+            void (^loggedCompletion)(UNNotificationPresentationOptions) =
+                ^(UNNotificationPresentationOptions options)
+            {
+                BunnyLog(@"[PushDebug] Presentation options: %lu",
+                         (unsigned long)options);
+                completion(options);
+            };
+
+            ((void (*)(id, SEL, UNUserNotificationCenter *,
+                       UNNotification *,
+                       void (^)(UNNotificationPresentationOptions)))
+                original)(selfObj, sel, center, notification,
+                          loggedCompletion);
+        });
+
+    if (class_addMethod(cls, sel, replacement, types))
+    {
+        BunnyLog(@"[PushDebug] Added presentation observer to %@", name);
+    }
+    else
+    {
+        method_setImplementation(method, replacement);
+        BunnyLog(@"[PushDebug] Installed presentation observer on %@", name);
+    }
+}
+
 %hook UIApplication
 
 - (void)setDelegate:(id<UIApplicationDelegate>)delegate
@@ -158,6 +222,24 @@ static void showPushSummary(void)
     gRegisterCalled = @"yes";
     BunnyLog(@"[PushDebug] registerForRemoteNotifications called");
     %orig;
+}
+
+%end
+
+%hook UNUserNotificationCenter
+
+- (void)setDelegate:(id<UNUserNotificationCenterDelegate>)delegate
+{
+    %orig;
+
+    if (delegate)
+    {
+        BunnyLog(@"[PushDebug] Notification delegate class: %@",
+                 NSStringFromClass([(NSObject *)delegate class]));
+
+        hookNotificationDelegateClass(
+            [(NSObject *)delegate class]);
+    }
 }
 
 %end
